@@ -49,7 +49,7 @@ def main():
         render_portfolio()
         return
     if page == "📰 Stock News":
-        render_news(ticker)
+        render_news()
         return
 
     if not ticker:
@@ -182,7 +182,10 @@ def render_portfolio():
     message = st.session_state.pop("portfolio_message", None)
     if message:
         level, text = message
-        st.error(text) if level == "error" else st.success(text)
+        if level == "error":
+            st.error(text)
+        else:
+            st.success(text)
 
     if not portfolio:
         st.info("Your portfolio is empty. Add a ticker above to get started.")
@@ -236,13 +239,16 @@ def add_to_portfolio(portfolio: dict, ticker: str, shares: float) -> tuple[str, 
     return "success", f"Added {shares:g} shares of {ticker} at ${price:,.2f}."
 
 
-def render_news(ticker):
-    st.title(f"📰 Latest News: {ticker or '-'}")
-    st.caption("Change the ticker in the sidebar to see news for another stock.")
+def render_news():
+    st.title("📰 Stock News")
+    portfolio_tickers = list(st.session_state.get("portfolio", {}).keys())
 
-    if not ticker:
-        st.warning("Please enter a stock ticker in the sidebar.")
+    if not portfolio_tickers:
+        st.info("Your portfolio is empty. Add stocks on the 💼 Portfolio page first, then come back to read their news.")
         return
+
+    ticker = st.selectbox("Select a stock from your portfolio", portfolio_tickers)
+    st.subheader(f"Latest headlines for {ticker}")
 
     with st.spinner(f"Fetching news for {ticker}..."):
         news = cached_news(ticker)
