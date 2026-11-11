@@ -38,7 +38,8 @@ def main():
 
     st.sidebar.divider()
     st.sidebar.subheader("Strategy settings")
-    ticker = st.sidebar.text_input("Stock ticker", value="AAPL").strip().upper()
+    st.sidebar.caption("Used by Price Chart, Trade Statistics, Detailed Trades and Strategy Comparison.")
+    ticker = st.sidebar.text_input("Stock ticker", value="AAPL", help="e.g. AAPL, TSLA, NVDA").strip().upper()
     start = st.sidebar.date_input("Start date", value=date.today() - timedelta(days=365 * 3))
     end = st.sidebar.date_input("End date", value=date.today())
     short_window = st.sidebar.number_input("Short-term MA (days)", min_value=2, max_value=200, value=20)
@@ -51,6 +52,8 @@ def main():
     if page == "📰 Stock News":
         render_news()
         return
+
+    st.title(PAGE_TITLES[page].format(ticker=ticker or "-"))
 
     if not ticker:
         st.warning("Please enter a stock ticker in the sidebar.")
@@ -86,7 +89,6 @@ def main():
 
 
 def render_price_chart(ticker, result, short_window, long_window):
-    st.title(f"{ticker} Price Chart")
     df = result["data"]
     buys = df[df["Signal"] == "BUY"]
     sells = df[df["Signal"] == "SELL"]
@@ -107,32 +109,33 @@ def render_price_chart(ticker, result, short_window, long_window):
 
 
 def render_statistics(ticker, result):
-    st.title(f"{ticker} Trade Statistics")
     stats = result["stats"]
 
     if stats["total_trades"] == 0:
         st.warning("No golden cross trades in this period. Try a longer date range or different MA settings.")
 
+    st.subheader("Trades")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total trades", stats["total_trades"])
-    col2.metric("Winning trades", stats["winning_trades"])
-    col3.metric("Losing trades", stats["losing_trades"])
-    col4.metric("Win rate", f"{stats['win_rate']:.1f}%")
+    col1.metric("Total trades", stats["total_trades"], border=True)
+    col2.metric("Winning trades", stats["winning_trades"], border=True)
+    col3.metric("Losing trades", stats["losing_trades"], border=True)
+    col4.metric("Win rate", f"{stats['win_rate']:.1f}%", border=True)
 
+    st.subheader("Returns")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Average trade return", f"{stats['avg_trade_return']:.2f}%")
-    col2.metric("Best trade", f"{stats['best_trade']:.2f}%")
-    col3.metric("Worst trade", f"{stats['worst_trade']:.2f}%")
-    col4.metric("Total strategy return", f"{stats['strategy_return']:.2f}%")
+    col1.metric("Average trade return", f"{stats['avg_trade_return']:.2f}%", border=True)
+    col2.metric("Best trade", f"{stats['best_trade']:.2f}%", border=True)
+    col3.metric("Worst trade", f"{stats['worst_trade']:.2f}%", border=True)
+    col4.metric("Total strategy return", f"{stats['strategy_return']:.2f}%", border=True)
 
+    st.subheader("Capital")
     col1, col2 = st.columns(2)
-    col1.metric("Initial capital", f"${stats['initial_capital']:,.2f}")
+    col1.metric("Initial capital", f"${stats['initial_capital']:,.2f}", border=True)
     col2.metric("Final portfolio value", f"${stats['final_strategy_value']:,.2f}",
-                f"{stats['strategy_return']:.2f}%")
+                f"{stats['strategy_return']:.2f}%", border=True)
 
 
 def render_trades(ticker, result):
-    st.title(f"{ticker} Detailed Trades")
     trades = result["trades"]
     if trades.empty:
         st.warning("No trades were generated in this period.")
@@ -142,17 +145,22 @@ def render_trades(ticker, result):
 
 
 def render_comparison(ticker, result):
-    st.title(f"{ticker}: Golden Cross vs Buy-and-Hold")
     df = result["data"]
     stats = result["stats"]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Golden cross return", f"{stats['strategy_return']:.2f}%",
-                f"${stats['final_strategy_value']:,.0f} final value", delta_color="off")
-    col2.metric("Buy-and-hold return", f"{stats['buy_hold_return']:.2f}%",
-                f"${stats['final_buy_hold_value']:,.0f} final value", delta_color="off")
     gap = stats["strategy_return"] - stats["buy_hold_return"]
-    col3.metric("Difference", f"{gap:+.2f} pp", "Golden cross wins" if gap > 0 else "Buy-and-hold wins", delta_color="off")
+
+    col1, col2 = st.columns(2)
+    col1.metric("🟢 Golden cross return", f"{stats['strategy_return']:.2f}%",
+                f"${stats['final_strategy_value']:,.0f} final value", delta_color="off", border=True)
+    col2.metric("🔵 Buy-and-hold return", f"{stats['buy_hold_return']:.2f}%",
+                f"${stats['final_buy_hold_value']:,.0f} final value", delta_color="off", border=True)
+
+    if gap > 0:
+        st.success(f"**Golden cross ended higher** by {gap:.2f} percentage points.")
+    elif gap < 0:
+        st.success(f"**Buy-and-hold ended higher** by {-gap:.2f} percentage points.")
+    else:
+        st.info("Both strategies ended with the same return.")
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df.index, y=df["Strategy_Equity"], name="Golden cross", line=dict(color="#2ca02c")))
@@ -173,11 +181,10 @@ def render_portfolio():
     portfolio: dict = st.session_state.portfolio
 
     with st.form("add_stock"):
-        col1, col2, col3 = st.columns([2, 2, 1])
-        col1.text_input("Ticker (e.g. MSFT)", key="new_ticker")
+        col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
+        col1.text_input("Ticker", placeholder="e.g. MSFT", key="new_ticker")
         col2.number_input("Shares", min_value=0.01, value=10.0, step=1.0, key="new_shares")
-        col3.write("")
-        col3.form_submit_button("Add", width="stretch", on_click=handle_add_stock)
+        col3.form_submit_button("➕ Add", type="primary", width="stretch", on_click=handle_add_stock)
 
     message = st.session_state.pop("portfolio_message", None)
     if message:
@@ -200,20 +207,26 @@ def render_portfolio():
     total_value = table["Market Value (USD)"].sum()
 
     col1, col2 = st.columns(2)
-    col1.metric("Total portfolio value", f"${total_value:,.2f}")
-    col2.metric("Number of stocks", f"{len(portfolio)} / {MAX_PORTFOLIO_STOCKS}")
+    col1.metric("Total portfolio value", f"${total_value:,.2f}", border=True)
+    col2.metric("Number of stocks", f"{len(portfolio)} / {MAX_PORTFOLIO_STOCKS}", border=True)
 
     table["Weight (%)"] = (table["Market Value (USD)"] / total_value * 100).round(2)
-    st.dataframe(table.style.format({"Shares": "{:,.2f}", "Latest Price (USD)": "{:,.2f}",
-                                     "Market Value (USD)": "{:,.2f}", "Weight (%)": "{:.2f}"}),
-                 width="stretch", hide_index=True)
+    table_col, chart_col = st.columns([3, 2])
+    with table_col:
+        st.subheader("Holdings")
+        st.dataframe(table.style.format({"Shares": "{:,.2f}", "Latest Price (USD)": "{:,.2f}",
+                                         "Market Value (USD)": "{:,.2f}", "Weight (%)": "{:.2f}"}),
+                     width="stretch", hide_index=True)
+    with chart_col:
+        st.subheader("Allocation")
+        fig = go.Figure(go.Pie(labels=table["Ticker"], values=table["Market Value (USD)"], hole=0.45,
+                               textinfo="label+percent"))
+        fig.update_layout(height=320, margin=dict(t=10, b=10, l=10, r=10), showlegend=False)
+        st.plotly_chart(fig, width="stretch")
 
-    fig = go.Figure(go.Pie(labels=table["Ticker"], values=table["Market Value (USD)"], hole=0.4))
-    fig.update_layout(height=400, title="Portfolio allocation")
-    st.plotly_chart(fig, width="stretch")
-
-    to_remove = st.multiselect("Remove stocks", list(portfolio.keys()))
-    if st.button("Remove selected", disabled=not to_remove):
+    col1, col2 = st.columns([4, 1], vertical_alignment="bottom")
+    to_remove = col1.multiselect("Remove stocks", list(portfolio.keys()), placeholder="Choose stocks to remove")
+    if col2.button("🗑️ Remove", width="stretch", disabled=not to_remove):
         for symbol in to_remove:
             portfolio.pop(symbol, None)
         st.rerun()
@@ -274,6 +287,13 @@ PAGES = [
     "📰 Stock News",
     "⚖️ Strategy Comparison",
 ]
+
+PAGE_TITLES = {
+    "📊 Price Chart": "📊 {ticker} Price Chart",
+    "📋 Trade Statistics": "📋 {ticker} Trade Statistics",
+    "🧾 Detailed Trades": "🧾 {ticker} Detailed Trades",
+    "⚖️ Strategy Comparison": "⚖️ {ticker}: Golden Cross vs Buy-and-Hold",
+}
 
 if __name__ == "__main__":
     main()
